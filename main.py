@@ -175,7 +175,7 @@ def render(data):
              "-filter_complex","[0:v]zoompan=z='min(zoom+0.00025,1.04)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1280x720:fps=25[bg];[1:v]scale=300:430[host];[2:v]scale=220:220[prop];[bg][prop]overlay=560:285[tmp];[tmp][host]overlay=850:245:shortest=1,format=yuv420p[v]",
              "-map","[v]","-map","3:a","-c:v","libx264","-preset","veryfast","-c:a","aac","-shortest","-movflags","+faststart",str(seg)])
         parts.append(seg)
-    listing=OUT/"concat.txt"; listing.write_text("".join(f"file '{p.resolve()}\\n" for p in parts))
+    listing=OUT/"concat.txt"; listing.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
     final=OUT/"finance_episode.mp4"
     run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(listing),"-c","copy","-movflags","+faststart",str(final)])
     return final
@@ -199,12 +199,93 @@ def upload(video,thumb,data):
     except Exception as e: print("Thumbnail upload skipped:",e)
     print("Uploaded video:", "https://youtube.com/watch?v="+result["id"])
 
+
+def create_short(client, episode_title, number):
+    prompt=f"""Create an original vertical YouTube Short about personal finance, connected to this broad topic: {episode_title}.
+This is Short number {number} of 2 for today's channel. Choose a distinct practical angle and do not repeat the other short.
+Write in natural American English for a general US audience. Target 45-60 seconds spoken total.
+Return ONLY valid JSON with title, description, tags and EXACTLY 3 scenes.
+Each scene must have narration (35-45 words), setting, action, visual and screen_text (maximum 7 words).
+Use a strong first-second hook, one useful educational takeaway, and a memorable ending.
+No personalized financial advice, no guaranteed returns, no imitation of any creator.
+"""
+    raw=client.models.generate_content(model=os.getenv("GEMINI_MODEL","gemini-2.5-flash"),contents=prompt).text.strip()
+    raw=raw[raw.find("{"):raw.rfind("}")+1]
+    data=json.loads(raw)
+    if len(data.get("scenes",[])) != 3: raise ValueError("Short must contain exactly 3 scenes.")
+    data["title"]=(data.get("title","Money tip")[:85].strip()+" #Shorts")
+    data["description"]=(data.get("description","")+"\n\nEducational content only; not financial advice. #Shorts")
+    return data
+
+def make_short_scene(scene,index,title):
+    im=Image.new("RGB",(1080,1920),"#f4efe5"); d=ImageDraw.Draw(im)
+    palettes=[("#e8f0fa","#c7d9ed"),("#f5eadc","#e8d3b8"),("#e5f1e8","#c7dfce")]
+    top,floor=palettes[index%3]
+    d.rectangle((0,0,1080,1920),fill=top)
+    d.rectangle((0,1450,1080,1920),fill=floor)
+    d.rounded_rectangle((55,65,1025,250),radius=42,fill="#151a2d")
+    d.multiline_text((95,105),textwrap.fill(title.upper(),24),font=font(48,True),fill="white",spacing=8)
+    d.ellipse((105,390,975,1260),fill="#d9e8ff")
+    words=(scene.get("visual","")+" "+scene.get("setting","")).lower()
+    if any(k in words for k in ["chart","stock","invest","growth","market"]):
+        for j,x in enumerate((260,405,550,695)):
+            h=150+j*115
+            d.rounded_rectangle((x,1120-h,x+95,1120),radius=18,fill="#399b72")
+        d.line([(220,900),(410,760),(580,800),(760,580),(875,500)],fill="#f0b83f",width=18)
+    elif any(k in words for k in ["card","debt","loan","bill"]):
+        d.rounded_rectangle((250,700,830,1060),radius=42,fill="#304c79",outline="white",width=8)
+        d.rectangle((260,790,820,850),fill="#f2c85b")
+        d.text((340,900),"CREDIT",font=font(68,True),fill="white")
+    else:
+        d.ellipse((300,640,780,1120),fill="#dcae35",outline="#8c681b",width=14)
+        d.ellipse((335,675,745,1085),outline="#fff0a8",width=10)
+        d.text((445,710),"$",font=font(300,True),fill="#24365c")
+    caption=textwrap.fill(scene.get("screen_text",""),20)
+    d.rounded_rectangle((55,1455,1025,1765),radius=42,fill="white",outline="#d5dce6",width=5)
+    d.multiline_text((105,1520),caption,font=font(65,True),fill="#17233d",spacing=15)
+    d.text((85,1820),"MONEY MADE SIMPLE  •  EDUCATIONAL",font=font(30,True),fill="#17233d")
+    p=OUT/f"short_scene_{index:02d}.png"; im.save(p); return p
+
+def render_short(data,number):
+    parts=[]
+    for i,scene in enumerate(data["scenes"]):
+        pic=make_short_scene(scene,i,data["title"])
+        host=OUT/f"short_host_{number}_{i}.gif"
+        prop=OUT/f"short_prop_{number}_{i}.gif"
+        make_character_animation(scene,host); make_money_prop_animation(scene,prop)
+        audio=OUT/f"short_voice_{number}_{i}.mp3"
+        segment=OUT/f"short_segment_{number}_{i}.mp4"
+        asyncio.run(make_voice(scene["narration"],audio))
+        run(["ffmpeg","-y","-loop","1","-framerate","25","-i",str(pic),
+             "-stream_loop","-1","-i",str(host),"-stream_loop","-1","-i",str(prop),"-i",str(audio),
+             "-filter_complex","[0:v]scale=1080:1920,format=yuv420p[bg];[1:v]scale=430:615[host];[2:v]scale=300:300[prop];[bg][prop]overlay=60:1010[tmp];[tmp][host]overlay=590:720,format=yuv420p[v]",
+             "-map","[v]","-map","3:a","-c:v","libx264","-preset","veryfast","-c:a","aac","-shortest","-movflags","+faststart",str(segment)])
+        parts.append(segment)
+    listing=OUT/f"short_concat_{number}.txt"
+    listing.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
+    final=OUT/f"finance_short_{number}.mp4"
+    run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(listing),"-c","copy","-movflags","+faststart",str(final)])
+    return final
+
 def main():
     if not os.getenv("GEMINI_API_KEY"): raise RuntimeError("Add GEMINI_API_KEY in GitHub Actions secrets.")
-    data=create_episode(); (OUT/"episode.json").write_text(json.dumps(data,indent=2))
+    client=genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    data=create_episode()
+    (OUT/"episode.json").write_text(json.dumps(data,indent=2))
     video=render(data); thumb=make_thumbnail(data["title"])
-    if os.getenv("ENABLE_YOUTUBE_UPLOAD","false").lower()=="true": upload(video,thumb,data)
-    else: print("Video rendered. YouTube upload is disabled until OAuth secrets are configured.")
-    print("Finished:",video)
+    shorts=[]
+    for number in (1,2):
+        short_data=create_short(client,data["title"],number)
+        (OUT/f"short_{number}.json").write_text(json.dumps(short_data,indent=2))
+        shorts.append((render_short(short_data,number),short_data))
+    if os.getenv("ENABLE_YOUTUBE_UPLOAD","false").lower()=="true":
+        upload(video,thumb,data)
+        for short_video,short_data in shorts:
+            short_thumb=make_thumbnail(short_data["title"].replace("#Shorts","").strip())
+            upload(short_video,short_thumb,short_data)
+    else:
+        print("Videos rendered; YouTube upload is disabled until OAuth secrets are configured.")
+    print("Finished long video:",video)
+    for short_video,_ in shorts: print("Finished Short:",short_video)
 
 if __name__=="__main__": main()
