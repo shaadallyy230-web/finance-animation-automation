@@ -29,10 +29,38 @@ def character(d,x,y,s=1):
     d.ellipse((x+10*s,y-42*s,x+18*s,y-34*s),fill="#24201e")
     d.arc((x-13*s,y-32*s,x+13*s,y-12*s),5,170,fill="#713d32",width=3)
 
+def generate_text(client, prompt):
+    """Retry temporary Gemini overloads, then use a supported lower-cost backup model."""
+    primary=os.getenv("GEMINI_MODEL","gemini-3.8-flash")
+    backup=os.getenv("GEMINI_BACKUP_MODEL","gemini-3.5-flash-lite")
+    models=list(dict.fromkeys([primary,backup]))
+    last_error=None
+    for model in models:
+        for attempt,delay in enumerate((0,15,30,60),start=1):
+            if delay:
+                print(f"Gemini {model} busy; retry {attempt}/4 in {delay}s...")
+                time.sleep(delay)
+            try:
+                response=client.models.generate_content(model=model,contents=prompt)
+                if not response or not response.text:
+                    raise RuntimeError(f"Gemini {model} returned an empty response.")
+                print(f"Gemini response generated with {model}.")
+                return response.text.strip()
+            except Exception as exc:
+                last_error=exc
+                message=str(exc).upper()
+                temporary=any(code in message for code in ("503","UNAVAILABLE","429","RESOURCE_EXHAUSTED","500","502","504","INTERNAL"))
+                if not temporary:
+                    raise
+                print(f"Gemini {model} temporary error on attempt {attempt}/4: {exc}")
+        print(f"Primary model {model} remained unavailable; trying backup if configured.")
+    raise RuntimeError(f"Gemini primary and backup models failed. Last error: {last_error}") from last_error
+
+
 def create_episode():
     client=genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     prompt="""Create a completely original English personal-finance story for a general US audience, 1,200-1,350 spoken words (about 9-10 minutes). Use a strong hook, relatable examples, a clear story arc and practical takeaways. Do not imitate any creator, reuse scripts, promise returns or give personalized advice. Plan EXACTLY 45 scenes for a lively 2D cartoon/whiteboard explainer, not a slideshow. Each scene narration should be about 24-32 words and include narration, setting, action, visual and screen_text. The recurring original host is a young adult man wearing a black shirt, beige trousers, brown belt and white sneakers. Keep him consistent but vary gestures, emotions, backgrounds and props. Return valid JSON with title, description, tags and scenes. Title under 95 characters; description includes an educational-not-financial-advice disclaimer."""
-    raw=client.models.generate_content(model=os.getenv("GEMINI_MODEL","gemini-2.5-flash"),contents=prompt).text.strip()
+    raw=generate_text(client,prompt)
     raw=raw[raw.find("{"):raw.rfind("}")+1]
     data=json.loads(raw)
     if len(data.get("scenes",[])) != 45: raise ValueError("Episode must contain exactly 45 scenes; run again.")
