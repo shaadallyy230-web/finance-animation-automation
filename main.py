@@ -31,28 +31,48 @@ def character(d,x,y,s=1):
 
 def create_episode():
     client=genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    prompt="""Create an original English personal-finance explainer for a general US audience, 1,250-1,400 spoken words (about 9-10 minutes). Friendly and entertaining, not imitating any creator. Topic: choose budgeting, credit scores, compound interest, emergency funds, debt traps or beginner investing. No guaranteed returns or personalized advice. Return ONLY valid JSON: {"title":"...","description":"2 paragraphs with educational disclaimer","tags":["..."],"scenes":[{"narration":"55-75 spoken words","visual":"short visual direction","screen_text":"3-7 word caption"}]}. Make 18-22 scenes."""
+    prompt="""Create a completely original English personal-finance story for a general US audience, 1,200-1,350 spoken words (about 9-10 minutes). Use a strong hook, relatable examples, a clear story arc and practical takeaways. Do not imitate any creator, reuse scripts, promise returns or give personalized advice. Plan EXACTLY 45 scenes for a lively 2D cartoon/whiteboard explainer, not a slideshow. Each scene narration should be about 24-32 words and include narration, setting, action, visual and screen_text. The recurring original host is a young adult man wearing a black shirt, beige trousers, brown belt and white sneakers. Keep him consistent but vary gestures, emotions, backgrounds and props. Return valid JSON with title, description, tags and scenes. Title under 95 characters; description includes an educational-not-financial-advice disclaimer."""
     raw=client.models.generate_content(model=os.getenv("GEMINI_MODEL","gemini-2.5-flash"),contents=prompt).text.strip()
     raw=raw[raw.find("{"):raw.rfind("}")+1]
     data=json.loads(raw)
-    if len(data.get("scenes",[]))<12: raise ValueError("Too few scenes generated")
+    if len(data.get("scenes",[])) != 45: raise ValueError("Episode must contain exactly 45 scenes; run again.")
     return data
 
 def make_scene(s,i,total,title):
     im=Image.new("RGB",(W,H),"#f4efe5"); d=ImageDraw.Draw(im)
-    d.rectangle((0,0,W,105),fill="#151a2d")
-    d.text((48,27),"MONEY MADE SIMPLE",font=font(30,True),fill="white")
-    d.text((W-180,36),f"{i+1:02d} / {total:02d}",font=font(22,True),fill="#a9c5ff")
-    d.rounded_rectangle((55,145,790,620),radius=28,fill="white",outline="#e0d9cd",width=3)
-    d.text((90,180),"THE BIG IDEA",font=font(23,True),fill="#315a9a")
-    d.multiline_text((90,235),textwrap.fill(s.get("screen_text",""),27),font=font(43,True),fill="#17233d",spacing=12)
-    d.multiline_text((92,440),textwrap.fill(s.get("visual",""),40),font=font(20),fill="#626b78",spacing=8)
-    d.ellipse((900,170,1170,440),fill="#d9e8ff"); d.ellipse((960,230,1110,380),fill="#f5c95f")
-    d.text((985,273),"$",font=font(82,True),fill="#24365c")
-    for j,h in enumerate([80,130,190,245]):
-        xx=920+j*65; d.rounded_rectangle((xx,520-h,xx+36,520),radius=8,fill="#5488ce")
-    character(d,1035,470,.75)
-    d.rectangle((0,675,W,720),fill="#151a2d"); d.text((48,685),title[:90],font=font(18),fill="white")
+    palettes=[("#e8f0fa","#c7d9ed"),("#f5eadc","#e8d3b8"),("#e5f1e8","#c7dfce"),("#f0e9f7","#d9c9e8")]
+    top,floor=palettes[i%len(palettes)]
+    d.rectangle((0,0,W,590),fill=top); d.rectangle((0,590,W,H),fill=floor)
+    d.rectangle((0,0,W,92),fill="#151a2d")
+    d.text((42,25),"MONEY MADE SIMPLE",font=font(27,True),fill="white")
+    d.text((W-155,30),f"{i+1:02d}/{total:02d}",font=font(22,True),fill="#a9c5ff")
+    setting=s.get("setting","").lower()
+    if any(k in setting for k in ["home","apartment","living","kitchen"]):
+        d.rectangle((65,145,330,390),fill="#d6e9f6",outline="#607c99",width=7)
+        d.line((197,145,197,390),fill="#607c99",width=6); d.line((65,265,330,265),fill="#607c99",width=6)
+        d.rectangle((55,510,470,565),fill="#9b704c")
+    elif any(k in setting for k in ["office","work","classroom"]):
+        d.rectangle((75,150,390,350),fill="#fffdf4",outline="#57708d",width=7)
+        d.text((105,185),"PLAN",font=font(36,True),fill="#315a9a")
+        d.line((110,255,345,255),fill="#86a2c5",width=8); d.line((110,300,295,300),fill="#86a2c5",width=8)
+    else:
+        d.ellipse((90,175,360,445),fill="#d9e8ff"); d.text((165,255),"IDEA",font=font(48,True),fill="#315a9a")
+    words=(s.get("visual","")+" "+setting).lower()
+    if any(k in words for k in ["bank","saving","money","cash","budget","wallet","paycheck","income"]):
+        d.rounded_rectangle((500,300,660,420),radius=18,fill="#f2c85b",outline="#7d6024",width=4)
+        d.text((545,310),"$",font=font(85,True),fill="#253657")
+    elif any(k in words for k in ["credit","card","debt","bill","loan"]):
+        d.rounded_rectangle((500,310,680,420),radius=15,fill="#304c79",outline="#17233d",width=4)
+        d.rectangle((505,345,675,360),fill="#f2c85b"); d.text((535,370),"CARD",font=font(24,True),fill="white")
+    elif any(k in words for k in ["invest","stock","market","growth","compound"]):
+        d.line((500,420,550,365,600,385,650,320,700,280),fill="#2e9b72",width=10)
+    else:
+        d.ellipse((520,300,680,460),fill="#f5c95f"); d.text((570,330),"$",font=font(90,True),fill="#24365c")
+    character(d,930,465,1.1,i%3)
+    d.rounded_rectangle((45,475,700,640),radius=24,fill="white",outline="#d5dce6",width=3)
+    d.text((78,495),"THE MONEY LESSON",font=font(18,True),fill="#315a9a")
+    d.multiline_text((78,528),textwrap.fill(s.get("screen_text",""),34),font=font(34,True),fill="#17233d",spacing=7)
+    d.rectangle((0,675,W,720),fill="#151a2d"); d.text((42,686),title[:95],font=font(17),fill="white")
     p=OUT/f"scene_{i:02d}.png"; im.save(p); return p
 
 async def make_voice(txt,path):
@@ -66,11 +86,14 @@ def render(data):
         pic=make_scene(s,i,len(data["scenes"]),data["title"])
         aud=OUT/f"voice_{i:02d}.mp3"; seg=OUT/f"segment_{i:02d}.mp4"
         asyncio.run(make_voice(s["narration"],aud))
-        run(["ffmpeg","-y","-loop","1","-i",str(pic),"-i",str(aud),"-vf","scale=1280:720,format=yuv420p","-c:v","libx264","-preset","veryfast","-tune","stillimage","-c:a","aac","-shortest",str(seg)])
+        # Slow zoom/pan gives each illustrated scene movement instead of a static slide.
+        run(["ffmpeg","-y","-loop","1","-framerate","25","-i",str(pic),"-i",str(aud),
+             "-vf","zoompan=z='min(zoom+0.0005,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1280x720:fps=25,format=yuv420p",
+             "-c:v","libx264","-preset","veryfast","-tune","stillimage","-c:a","aac","-shortest","-movflags","+faststart",str(seg)])
         parts.append(seg)
-    listing=OUT/"concat.txt"; listing.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
+    listing=OUT/"concat.txt"; listing.write_text("".join(f"file '{p.resolve()}\\n" for p in parts))
     final=OUT/"finance_episode.mp4"
-    run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(listing),"-c","copy",str(final)])
+    run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(listing),"-c","copy","-movflags","+faststart",str(final)])
     return final
 
 def make_thumbnail(title):
