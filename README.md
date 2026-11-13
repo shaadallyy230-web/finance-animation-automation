@@ -1,24 +1,23 @@
 # Finance Animation Automation
 
-A free-tier, GitHub Actions-based pipeline for original English personal-finance explainer videos.
+A GitHub Actions pipeline for original English personal-finance explainer videos and vertical YouTube Shorts.
 
-## What the bot creates
-- Original 9–10 minute English finance scripts for a general US audience
-- 45 planned scenes with narration, setting, action, visual direction and on-screen captions
-- American-English narration using Edge TTS
-- A recurring original 2D host in a black shirt, beige trousers, brown belt and white sneakers
-- Frame-by-frame looping character animation: walk-cycle motion, arm gestures, blinking and talking-mouth movement
-- Animated finance props: bouncing dollar coin, moving chart bars/line or rocking credit card
-- Camera movement, thumbnail, SEO metadata and optional YouTube upload
+## Weekly publishing target
+- Monday–Saturday: 1 long-form 9–10 minute finance animation per day
+- Monday–Saturday: 2 original vertical YouTube Shorts per day
+- Sunday: no scheduled run
+- Weekly target: 6 long videos + 12 Shorts
+
+Each daily run generates one long episode with 45 scenes and two separate 3-scene vertical Shorts. The recurring original 2D host wears a black shirt, beige trousers, brown belt and white sneakers. Character walk-cycle/gesture/blink/talking loops, animated finance props and camera movement are included.
 
 ## Setup
 1. Add `GEMINI_API_KEY` under repository Settings → Secrets and variables → Actions.
-2. For YouTube upload, configure the optional OAuth secrets described in [SETUP.md](SETUP.md).
-3. Open Actions → Weekly Finance Animation → Run workflow to test manually.
+2. For YouTube upload, configure `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`, and `ENABLE_YOUTUBE_UPLOAD=true` as repository secrets.
+3. Open Actions → Daily Finance Animation + 2 Shorts → Run workflow to test manually.
 
-The weekly workflow is scheduled for Monday 13:00 UTC. GitHub may delay scheduled runs.
+The scheduled run is Monday–Saturday at 13:00 UTC (6:30 PM India time). GitHub may delay scheduled runs.
 
 ## Important limitations
-This is a procedural 2D cutout/cartoon animation starter, not a studio-grade hand-drawn cartoon and not a frame-for-frame copy of any reference channel. Character and prop motion are generated from reusable loops and scene directions. Review the rendered video before publishing. Free API quotas, GitHub Actions limits and third-party voice service availability can change. No unlimited-free or guaranteed-upload promise is made.
+This is procedural 2D cutout/cartoon animation, not studio-grade hand-drawn animation or a frame-for-frame copy of any reference channel. Free Gemini quotas, Edge TTS availability, GitHub Actions limits and YouTube API quotas apply. The workflow uploads as **private** by default; review the videos before making them public. Without YouTube OAuth secrets, it only creates downloadable workflow artifacts. No unlimited-free or guaranteed-upload promise is made.
 
-All scripts, characters, branding and visuals should remain original. Educational content only; not financial advice.
+Keep all scripts, characters, branding and visuals original. Educational content only; not financial advice.
