@@ -27,6 +27,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.8-flash
+          GEMINI_BACKUP_MODEL: gemini-3.5-flash-lite
           VOICE: en-US-GuyNeural
           ENABLE_YOUTUBE_UPLOAD: ${{ secrets.ENABLE_YOUTUBE_UPLOAD }}
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
