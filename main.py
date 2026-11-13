@@ -1,4 +1,4 @@
-import os, json, asyncio, subprocess, textwrap, math
+import os, json, asyncio, subprocess, textwrap, math, time
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import edge_tts
@@ -237,7 +237,7 @@ Each scene must have narration (35-45 words), setting, action, visual and screen
 Use a strong first-second hook, one useful educational takeaway, and a memorable ending.
 No personalized financial advice, no guaranteed returns, no imitation of any creator.
 """
-    raw=client.models.generate_content(model=os.getenv("GEMINI_MODEL","gemini-2.5-flash"),contents=prompt).text.strip()
+    raw=generate_text(client,prompt)
     raw=raw[raw.find("{"):raw.rfind("}")+1]
     data=json.loads(raw)
     if len(data.get("scenes",[])) != 3: raise ValueError("Short must contain exactly 3 scenes.")
