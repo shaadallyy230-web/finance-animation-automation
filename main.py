@@ -1,4 +1,4 @@
-import os, json, asyncio, subprocess, textwrap
+import os, json, asyncio, subprocess, textwrap, math
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import edge_tts
@@ -68,12 +68,64 @@ def make_scene(s,i,total,title):
         d.line((500,420,550,365,600,385,650,320,700,280),fill="#2e9b72",width=10)
     else:
         d.ellipse((520,300,680,460),fill="#f5c95f"); d.text((570,330),"$",font=font(90,True),fill="#24365c")
-    character(d,930,465,1.1,i%3)
     d.rounded_rectangle((45,475,700,640),radius=24,fill="white",outline="#d5dce6",width=3)
     d.text((78,495),"THE MONEY LESSON",font=font(18,True),fill="#315a9a")
     d.multiline_text((78,528),textwrap.fill(s.get("screen_text",""),34),font=font(34,True),fill="#17233d",spacing=7)
     d.rectangle((0,675,W,720),fill="#151a2d"); d.text((42,686),title[:95],font=font(17),fill="white")
     p=OUT/f"scene_{i:02d}.png"; im.save(p); return p
+
+def make_character_animation(scene,path):
+    """Render a looping, transparent frame-by-frame 2D host animation."""
+    action=(scene.get("action","")+" "+scene.get("visual","")).lower()
+    mode="walk" if any(k in action for k in ["walk","run","arrive","leave"]) else (
+        "point" if any(k in action for k in ["point","show","explain","chart","screen"]) else (
+        "celebrate" if any(k in action for k in ["celebrat","success","win","happy","excited"]) else (
+        "think" if any(k in action for k in ["think","confus","wonder","question"]) else "talk")))
+    frames=[]
+    fw,fh=300,430
+    for f in range(24):
+        phase=2*math.pi*f/24
+        bob=round(3*math.sin(phase*2))
+        sway=round(4*math.sin(phase))
+        im=Image.new("RGBA",(fw,fh),(0,0,0,0)); d=ImageDraw.Draw(im)
+        cx=150+sway; hip=275+bob
+        leg=math.sin(phase) if mode=="walk" else 0.22*math.sin(phase)
+        left_knee=(cx-28+int(12*leg),345+int(7*abs(leg)))
+        right_knee=(cx+28-int(12*leg),345-int(7*abs(leg)))
+        d.line((cx-20,hip,left_knee[0],left_knee[1],cx-36-int(18*leg),398),fill="#d8c19a",width=25)
+        d.line((cx+20,hip,right_knee[0],right_knee[1],cx+36+int(18*leg),398),fill="#d8c19a",width=25)
+        d.rounded_rectangle((cx-62-int(18*leg),390,cx-20-int(18*leg),414),radius=9,fill="white",outline="#242424",width=3)
+        d.rounded_rectangle((cx+18+int(18*leg),390,cx+62+int(18*leg),414),radius=9,fill="white",outline="#242424",width=3)
+        d.rounded_rectangle((cx-55,165+bob,cx+55,290+bob),radius=23,fill="#171717")
+        d.rectangle((cx-50,267+bob,cx+50,281+bob),fill="#79502e")
+        d.rectangle((cx-6,267+bob,cx+6,281+bob),fill="#d7b36a")
+        swing=math.sin(phase)*22
+        if mode=="point":
+            left_end=(cx-92,225+int(8*math.sin(phase))); right_end=(cx+112,145+int(5*math.sin(phase)))
+        elif mode=="celebrate":
+            left_end=(cx-100,115+int(8*math.sin(phase))); right_end=(cx+100,115-int(8*math.sin(phase)))
+        elif mode=="think":
+            left_end=(cx-95,245); right_end=(cx+75,145+int(8*math.sin(phase)))
+        elif mode=="walk":
+            left_end=(cx-75-int(swing),245+int(swing/2)); right_end=(cx+75+int(swing),245-int(swing/2))
+        else:
+            left_end=(cx-80-int(swing),225+int(8*math.sin(phase))); right_end=(cx+80+int(swing),225-int(8*math.sin(phase)))
+        d.line((cx-48,190+bob,left_end[0],left_end[1]),fill="#d8a47d",width=19)
+        d.line((cx+48,190+bob,right_end[0],right_end[1]),fill="#d8a47d",width=19)
+        for ex,ey in (left_end,right_end): d.ellipse((ex-12,ey-12,ex+12,ey+12),fill="#d8a47d")
+        hy=105+bob
+        d.ellipse((cx-43,hy-55,cx+43,hy+35),fill="#d8a47d")
+        d.pieslice((cx-45,hy-62,cx+45,hy+25),180,360,fill="#24201e")
+        if f in (11,12):
+            d.line((cx-25,hy-8,cx-12,hy-8),fill="#24201e",width=4); d.line((cx+12,hy-8,cx+25,hy-8),fill="#24201e",width=4)
+        else:
+            d.ellipse((cx-25,hy-13,cx-15,hy-2),fill="#24201e"); d.ellipse((cx+15,hy-13,cx+25,hy-2),fill="#24201e")
+        if mode=="think": d.arc((cx-10,hy+4,cx+18,hy+22),190,330,fill="#713d32",width=3)
+        elif f%4 in (0,1): d.ellipse((cx-8,hy+9,cx+8,hy+24),fill="#713d32")
+        else: d.arc((cx-12,hy+5,cx+12,hy+22),5,170,fill="#713d32",width=3)
+        frames.append(im)
+    frames[0].save(path,save_all=True,append_images=frames[1:],duration=83,loop=0,disposal=2)
+    return path
 
 async def make_voice(txt,path):
     await edge_tts.Communicate(text=txt,voice=os.getenv("VOICE","en-US-GuyNeural")).save(str(path))
@@ -84,12 +136,13 @@ def render(data):
     parts=[]
     for i,s in enumerate(data["scenes"]):
         pic=make_scene(s,i,len(data["scenes"]),data["title"])
+        character_gif=OUT/f"host_{i:02d}.gif"
+        make_character_animation(s,character_gif)
         aud=OUT/f"voice_{i:02d}.mp3"; seg=OUT/f"segment_{i:02d}.mp4"
         asyncio.run(make_voice(s["narration"],aud))
-        # Slow zoom/pan gives each illustrated scene movement instead of a static slide.
-        run(["ffmpeg","-y","-loop","1","-framerate","25","-i",str(pic),"-i",str(aud),
-             "-vf","zoompan=z='min(zoom+0.0005,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1280x720:fps=25,format=yuv420p",
-             "-c:v","libx264","-preset","veryfast","-tune","stillimage","-c:a","aac","-shortest","-movflags","+faststart",str(seg)])
+        run(["ffmpeg","-y","-loop","1","-framerate","25","-i",str(pic),"-stream_loop","-1","-i",str(character_gif),"-i",str(aud),
+             "-filter_complex","[0:v]zoompan=z='min(zoom+0.00025,1.04)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1280x720:fps=25[bg];[1:v]scale=300:430[host];[bg][host]overlay=850:245:shortest=1,format=yuv420p[v]",
+             "-map","[v]","-map","2:a","-c:v","libx264","-preset","veryfast","-c:a","aac","-shortest","-movflags","+faststart",str(seg)])
         parts.append(seg)
     listing=OUT/"concat.txt"; listing.write_text("".join(f"file '{p.resolve()}\\n" for p in parts))
     final=OUT/"finance_episode.mp4"
