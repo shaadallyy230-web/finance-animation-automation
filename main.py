@@ -127,6 +127,35 @@ def make_character_animation(scene,path):
     frames[0].save(path,save_all=True,append_images=frames[1:],duration=83,loop=0,disposal=2)
     return path
 
+def make_money_prop_animation(scene,path):
+    """Looping animated finance prop: bouncing coin, rising bars or rocking card."""
+    words=(scene.get("visual","")+" "+scene.get("action","")).lower()
+    kind="chart" if any(k in words for k in ["invest","stock","market","growth","compound","chart"]) else ("card" if any(k in words for k in ["credit","card","debt","bill","loan"]) else "coin")
+    frames=[]
+    for f in range(24):
+        phase=2*math.pi*f/24
+        im=Image.new("RGBA",(220,220),(0,0,0,0)); d=ImageDraw.Draw(im)
+        if kind=="chart":
+            d.line((22,184,198,184),fill="#30435f",width=5)
+            for j,x in enumerate((42,82,122,162)):
+                height=45+int((j+1)*25*(0.75+0.25*math.sin(phase-j*.35)))
+                d.rounded_rectangle((x,184-height,x+23,184),radius=5,fill="#399b72")
+            d.line([(20,145),(65,115),(105,126),(150,65),(196,35+int(5*math.sin(phase)))],fill="#f0b83f",width=7)
+        elif kind=="card":
+            angle=8*math.sin(phase)
+            card=Image.new("RGBA",(170,110),(0,0,0,0)); cd=ImageDraw.Draw(card)
+            cd.rounded_rectangle((3,3,167,107),radius=15,fill="#304c79",outline="white",width=4)
+            cd.rectangle((5,35,165,52),fill="#f2c85b"); cd.text((20,68),"CARD",font=font(22,True),fill="white")
+            im.alpha_composite(card.rotate(angle,resample=Image.Resampling.BICUBIC),(25,55))
+        else:
+            y=35+int(13*(1-math.cos(phase*2)))
+            d.ellipse((25,y+12,195,y+182),fill="#dcae35",outline="#8c681b",width=7)
+            d.ellipse((38,y+25,182,y+169),outline="#fff0a8",width=5)
+            d.text((77,y+36),"$",font=font(105,True),fill="#24365c")
+        frames.append(im)
+    frames[0].save(path,save_all=True,append_images=frames[1:],duration=83,loop=0,disposal=2)
+    return path
+
 async def make_voice(txt,path):
     await edge_tts.Communicate(text=txt,voice=os.getenv("VOICE","en-US-GuyNeural")).save(str(path))
 
@@ -137,12 +166,14 @@ def render(data):
     for i,s in enumerate(data["scenes"]):
         pic=make_scene(s,i,len(data["scenes"]),data["title"])
         character_gif=OUT/f"host_{i:02d}.gif"
+        prop_gif=OUT/f"prop_{i:02d}.gif"
         make_character_animation(s,character_gif)
+        make_money_prop_animation(s,prop_gif)
         aud=OUT/f"voice_{i:02d}.mp3"; seg=OUT/f"segment_{i:02d}.mp4"
         asyncio.run(make_voice(s["narration"],aud))
-        run(["ffmpeg","-y","-loop","1","-framerate","25","-i",str(pic),"-stream_loop","-1","-i",str(character_gif),"-i",str(aud),
-             "-filter_complex","[0:v]zoompan=z='min(zoom+0.00025,1.04)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1280x720:fps=25[bg];[1:v]scale=300:430[host];[bg][host]overlay=850:245:shortest=1,format=yuv420p[v]",
-             "-map","[v]","-map","2:a","-c:v","libx264","-preset","veryfast","-c:a","aac","-shortest","-movflags","+faststart",str(seg)])
+        run(["ffmpeg","-y","-loop","1","-framerate","25","-i",str(pic),"-stream_loop","-1","-i",str(character_gif),"-stream_loop","-1","-i",str(prop_gif),"-i",str(aud),
+             "-filter_complex","[0:v]zoompan=z='min(zoom+0.00025,1.04)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1280x720:fps=25[bg];[1:v]scale=300:430[host];[2:v]scale=220:220[prop];[bg][prop]overlay=560:285[tmp];[tmp][host]overlay=850:245:shortest=1,format=yuv420p[v]",
+             "-map","[v]","-map","3:a","-c:v","libx264","-preset","veryfast","-c:a","aac","-shortest","-movflags","+faststart",str(seg)])
         parts.append(seg)
     listing=OUT/"concat.txt"; listing.write_text("".join(f"file '{p.resolve()}\\n" for p in parts))
     final=OUT/"finance_episode.mp4"
