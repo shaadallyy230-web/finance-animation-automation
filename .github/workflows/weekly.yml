@@ -1,0 +1,43 @@
+name: Weekly Finance Animation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 13 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  create-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+      - name: Generate episode
+        env:
+          GEMINI_API_KEY: \${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-2.5-flash
+          VOICE: en-US-GuyNeural
+          ENABLE_YOUTUBE_UPLOAD: \${{ secrets.ENABLE_YOUTUBE_UPLOAD }}
+          YOUTUBE_CLIENT_ID: \${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: \${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: \${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python main.py
+      - name: Save generated files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finance-video-output
+          path: output/
+          if-no-files-found: ignore
+          retention-days: 7
